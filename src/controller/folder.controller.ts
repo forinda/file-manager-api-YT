@@ -1,9 +1,11 @@
 import MongoIdValidator from "@/helpers/mongo-id";
+import { paginator } from "@/helpers/paginator";
 import folderModel, { IFileFolder } from "@/models/folder.model";
 import mediafileModel from "@/models/mediafile.model";
 import { AppNext, AppRequest, AppResponse } from "@/type";
 
 class FolderController {
+  // Test endpoint
   async test(_req: AppRequest, res: AppResponse, next: AppNext) {
     try {
       return res.status(200).json({ message: "Folders endpoint working" });
@@ -11,22 +13,26 @@ class FolderController {
       return next(err);
     }
   }
+  // Get all folders
   async getAllFolders(req: AppRequest, res: AppResponse, next: AppNext) {
     try {
       const query = req.query;
       const limit = query.limit ? parseInt(query.limit as string) : 20;
       const page = query.page ? parseInt(query.page as string) : 1;
-
+      const totalDocs = await folderModel.countDocuments({});
       const folders = await folderModel
         .find({})
         .skip(limit * (page - 1))
         .limit(limit)
         .populate("parent", "name");
-      return res.status(200).json(folders);
+      return res
+        .status(200)
+        .json(paginator({ data: folders, page, limit, totalDocs }));
     } catch (error) {
       return next(error);
     }
   }
+  // Get folder files
   async getFolderFiles(req: AppRequest, res: AppResponse, next: AppNext) {
     try {
       const query = req.query;
@@ -49,15 +55,21 @@ class FolderController {
           });
         }
       }
+      const totalDocs = await mediafileModel.countDocuments({
+        folder: folderId,
+      });
       const files = await mediafileModel
         .find({ folder: folderId })
         .skip(limit * (page - 1))
         .limit(limit);
-      return res.status(200).json({files});
+      return res
+        .status(200)
+        .json(paginator({ data: files, page, limit, totalDocs }));
     } catch (error) {
       return next(error);
     }
   }
+  // Create folder
   async createFolder(req: AppRequest, res: AppResponse, next: AppNext) {
     try {
       let { name, parent } = req.body as Pick<IFileFolder, "name" | "parent">;
@@ -65,7 +77,9 @@ class FolderController {
         const untitledCounts = await folderModel.countDocuments({
           name: { $regex: "untitled_folder", $options: "i" },
         });
-        name = `untitled_folder_${untitledCounts + 1}`;
+        name = `untitled_folder_${parseInt(
+          (untitledCounts as unknown as string) + 1
+        )}`;
       }
       if (parent) {
         if (!MongoIdValidator.isValid(parent)) {
@@ -78,8 +92,10 @@ class FolderController {
       }
       const existingFolder = await folderModel.findOne({ name });
       if (existingFolder) {
-        const counts = folderModel.countDocuments({ name });
-        name += "_" + counts + 1;
+        const counts = await folderModel.countDocuments({
+          name: { $regex: name, $options: "i" },
+        });
+        name += `_${counts + 1}`;
       }
 
       const createdFolder = parent

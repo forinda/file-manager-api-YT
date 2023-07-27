@@ -1,3 +1,4 @@
+import { pathConfig } from "@/config";
 import fs from "node:fs";
 import path from "node:path";
 import { v4 as uuidv4 } from "uuid";
@@ -44,5 +45,21 @@ export class FIleHelpers {
   //   Generate file names from uuid
   public static generateFileName(filename: string) {
     return `${uuidv4()}.${FIleHelpers.getFileExtension(filename)}`;
+  }
+  // Get file path chunks
+  public static getFilePathChunks(filename: string) {
+    return filename.split(pathConfig.uploadDir);
+  }
+  // Get full file path
+  public static getFullFilePath(ralativeFilePath: string) {
+    return path.join(pathConfig.uploadDir, ralativeFilePath);
+  }
+  // Normalize file path
+  public static normalizeFilePath(filePath: string) {
+    const os = process.platform;
+    if (os === "win32") {
+      return path.win32.normalize(filePath).replace(/\\/g, "/");
+    }
+    return path.posix.normalize(filePath);
   }
 }
